@@ -1,4 +1,5 @@
 from bcrypt import hashpw, checkpw, gensalt
+from sqlalchemy import exists
 from sqlalchemy.orm.session import Session
 
 from db.model import User
@@ -17,6 +18,9 @@ def add_user(session: Session, username, password):
         raise e
 
     return user
+
+def exist_username(session:Session, username):
+    return session.query(exists().where(User.username == username)).scalar()
 
 def check_password(session: Session, username, password):
     user = session.query(User).filter_by(username=username).first()

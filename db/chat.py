@@ -43,6 +43,7 @@ def create_private_room(session: Session, user_id, tar_user_id):
         enter_room(session, tar_user_id, room.id)
     except Exception as e:
         raise e
+    return room
 
 def create_group_room(session: Session, create_user_id, tar_user_id_list):
     room_name = f'g-${create_user_id}-${datetime.now().strftime("%Y%m%d%H%M%S")}'
@@ -53,6 +54,7 @@ def create_group_room(session: Session, create_user_id, tar_user_id_list):
             enter_room(session, tar_user_id, room.id)
     except Exception as e:
         raise e
+    return room
 
 def get_user_room_list(session: Session, user_id):
 
