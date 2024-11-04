@@ -60,6 +60,7 @@ def get_user_chatroom_list(session: Session, user_id):
 
     return session.query(
         UserChatroom,
+        Chatroom.room_type,
         func.max(UserChatLog.created_at).label('messaging_time')
     ).select_from(UserChatroom).filter_by(
         user_id=user_id, is_active=True
@@ -73,7 +74,7 @@ def get_open_chatroom_list(session: Session):
     return session.query(
         Chatroom,
         func.max(UserChatLog.created_at).label('messaging_time'),
-        func.count(UserChatroom.user_id.distinct()).label('active_user_count')
+        func.count(UserChatroom.user_id.distinct()).label('active_user_count'),
     ).filter(
         Chatroom.room_type==RoomType.GROUP, Chatroom.is_active==True, UserChatroom.is_active==True
     ).outerjoin(UserChatroom).outerjoin(UserChatLog).group_by(
@@ -84,7 +85,16 @@ def get_open_chatroom_list(session: Session):
 
 def get_chatroom_detail(session: Session, room_id):
     chatroom = session.query(Chatroom).filter_by(id=room_id).one_or_none()
-    user_list = session.query(UserChatroom).filter_by(chatroom_id=room_id, is_active=True).join(User).all()
+    user_list = session.query(
+        User,
+        func.max(UserChatLog.created_at).label('messaging_time')
+    ).select_from(UserChatroom).filter_by(
+        chatroom_id=room_id, is_active=True
+    ).join(
+        User
+    ).outerjoin(UserChatLog).group_by(
+        User.id
+    ).all()
     return {
         'chatroom': chatroom,
         'user_list': user_list
