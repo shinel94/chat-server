@@ -9,6 +9,9 @@ HASH_SECRET_KEY = "a20xjmqh1ic4vl91"
 def get_user(session: Session, username):
     return session.query(User).filter_by(username=username).one_or_none()
 
+def get_user_list(session: Session):
+    return session.query(User).all()
+
 def add_user(session: Session, username, password):
     hashed_pw = hashpw(f'{HASH_SECRET_KEY}{password}'.encode('utf-8'), gensalt())
     user = User(username=username, password=hashed_pw.decode('utf-8'))

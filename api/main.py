@@ -2,17 +2,20 @@ from datetime import datetime
 from queue import Queue
 
 from flask import Flask, jsonify, request, g, Response
+from flask_cors import CORS
 from sqlalchemy.orm import sessionmaker
 
+from db.model import RoomType
 from util.jwt_util import decode_jwt_token, create_jwt_token
 
 from db.engine import engine
-from db.user import get_user, add_user, check_password, exist_username
+from db.user import get_user, add_user, check_password, exist_username, get_user_list as get_user_list_from_db
 from db.chat import create_private_room, create_group_room, update_user_read_message_date, is_user_in_chatroom, \
-    get_chatroom_detail, get_user_chatroom_list
+    get_chatroom_detail, get_user_chatroom_list, get_open_chatroom_list, enter_room, get_user_count_in_room
 from db.message import add_chat_message_log, get_chat_message_log
 
 app = Flask(__name__)
+CORS(app)
 
 chatroom_info = dict()
 sessionmaker = sessionmaker(engine)
@@ -23,14 +26,13 @@ sessionmaker = sessionmaker(engine)
 def check_token():
     # 인증이 필요하지 않은 엔드포인트를 설정 (예: 로그인, 회원가입 등)
     open_endpoints = ['/signin', '/signup']
-    if request.path in open_endpoints:
+    if request.path in open_endpoints or request.method == 'OPTIONS':
         return  # 인증이 필요 없는 엔드포인트는 통과
 
     # Authorization 헤더에서 토큰 추출
     auth_header = request.headers.get('Authorization')
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]  # 'Bearer ' 이후의 실제 토큰 값 추출
-
         # 토큰 검증
         try:
             payload = decode_jwt_token(token)
@@ -75,31 +77,37 @@ def signin():
     except:
         return jsonify({"error": "fail signin"}), 401
 
-
-@app.route('/chatrooms/private', methods=['POST'])
-def create_private_chatroom():
-    data = request.json
-    target_user_id = data.get('target_user_id')
-
+@app.route('/users', methods=['GET'])
+def get_user_list():
     try:
         with sessionmaker() as session:
-            create_private_room(session, g.user.id, target_user_id)
+            user_list = get_user_list_from_db(session)
+
+            # 로그인 처리 로직
+            return jsonify({"user_list": [
+                {
+                    "id": user.id,
+                    "username": user.username
+                } for user in user_list if user.id != g.user.id
+            ]})
+    except:
+        return jsonify({"error": "fail get user list"}), 401
+
+
+@app.route('/chatrooms', methods=['POST'])
+def create_private_chatroom():
+    data = request.json
+    target_user_id_list = data.get('target_user_id_list')
+    room_type = data.get('room_type')
+    try:
+        with sessionmaker() as session:
+            if room_type == RoomType.PRIVATE:
+                create_private_room(session, g.user.id, target_user_id_list[0])
+            else:
+                create_group_room(session, g.user.id, target_user_id_list)
         return Response("success", status=200)
     except:
         return jsonify({"error": "fail create private chatroom"}), 400
-
-
-@app.route('/chatrooms/group', methods=['POST'])
-def create_group_chatroom():
-    data = request.json
-    target_user_id_list = data.get('target_user_id')
-
-    try:
-        with sessionmaker() as session:
-            create_group_room(session, g.user.id, target_user_id_list)
-        return Response("success", status=200)
-    except:
-        return jsonify({"error": "fail create group chatroom"}), 400
 
 
 @app.route('/chatrooms', methods=['GET'])
@@ -107,17 +115,47 @@ def get_chatroom_list():
     try:
         with sessionmaker() as session:
             room_list = get_user_chatroom_list(session, g.user.id)
+            open_room_list = get_open_chatroom_list(session)
             return jsonify({
-                "chatroom_list": [
+                "entered_chatroom_list": [
                     {
                         "chatroom_id": row[0].chatroom_id,
                         "last_message_date": row[1],
                         "read_message_date": row[0].last_read_message_date
                     } for row in room_list
+                ],
+                "open_chatroom_list": [
+                    {
+                        "chatroom_id": row[0].id,
+                        "last_message_date": row[1],
+                        "active_user_count": row[2]
+                    } for row in open_room_list
                 ]
             })
     except:
         return jsonify({"error": "fail get chatroom list"}), 400
+
+@app.route('/chatrooms/<chatroom_id>', methods=['POST'])
+def enter_chatroom(chatroom_id: int):
+    try:
+        with sessionmaker() as session:
+            if not is_user_in_chatroom(session, g.user.id, chatroom_id) and get_user_count_in_room(session, chatroom_id) < 100:
+                enter_room(session, g.user.id, chatroom_id)
+                chatroom_detail = get_chatroom_detail(session, chatroom_id)
+                return jsonify({
+                    "chatroom_id": chatroom_detail['chatroom'].id,
+                    "chatroom_name": chatroom_detail['chatroom'].name,
+                    "user_list": [
+                        {
+                            "id": user.user.id,
+                            "username": user.user.username
+                        } for user in chatroom_detail['user_list']
+                    ]
+                })
+            else:
+                return jsonify({"error": "fail get chatroom info"}), 400
+    except:
+        return jsonify({"error": "fail get chatroom info"}), 400
 
 @app.route('/chatrooms/<chatroom_id>', methods=['GET'])
 def get_chatroom_info(chatroom_id: int):

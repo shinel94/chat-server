@@ -69,6 +69,19 @@ def get_user_chatroom_list(session: Session, user_id):
         func.max(UserChatLog.created_at).desc()
     ).all()
 
+def get_open_chatroom_list(session: Session):
+    return session.query(
+        Chatroom,
+        func.max(UserChatLog.created_at).label('messaging_time'),
+        func.count(UserChatroom.user_id.distinct()).label('active_user_count')
+    ).filter(
+        Chatroom.room_type==RoomType.GROUP, Chatroom.is_active==True, UserChatroom.is_active==True
+    ).outerjoin(UserChatroom).outerjoin(UserChatLog).group_by(
+        Chatroom.id,
+    ).order_by(
+        func.max(UserChatLog.created_at).desc()
+    ).all()
+
 def get_chatroom_detail(session: Session, room_id):
     chatroom = session.query(Chatroom).filter_by(id=room_id).one_or_none()
     user_list = session.query(UserChatroom).filter_by(chatroom_id=room_id, is_active=True).join(User).all()
