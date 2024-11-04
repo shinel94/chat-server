@@ -47,6 +47,7 @@ class UserChatroom(Base):
     is_active = Column(Boolean, default=True)
 
     created_at = Column(DateTime, default=datetime.now)
+    last_read_message_date = Column(DateTime, nullable=True)
 
 class UserChatLog(Base):
     __tablename__ = 'user_chat_log'

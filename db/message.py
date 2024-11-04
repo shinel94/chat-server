@@ -25,13 +25,13 @@ if __name__ == "__main__":
     from db.engine import engine
 
     session = Session(engine)
-    # user1 = add_user(session,'message_test1', 'test1pwd')
-    # user2 = add_user(session,'message_test2', 'test2pwd')
-    #
-    # room = create_private_room(session, user1.id, user2.id)
-    #
-    # for i in range(100):
-    #     message = add_chat_message_log(session, user1.id, room.id, f"message-{i}")
+    user1 = add_user(session,'message_test1', 'test1pwd')
+    user2 = add_user(session,'message_test2', 'test2pwd')
+
+    room = create_private_room(session, user1.id, user2.id)
+
+    for i in range(100):
+        message = add_chat_message_log(session, user1.id, room.id, f"message-{i}")
 
     message = get_chat_message_log(session, 3)
     print(message)

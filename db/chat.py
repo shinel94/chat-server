@@ -1,6 +1,6 @@
-from sqlalchemy import func
+from sqlalchemy import func, exists
 from sqlalchemy.orm.session import Session
-from db.model import Chatroom, UserChatroom, RoomType, UserChatLog
+from db.model import Chatroom, UserChatroom, RoomType, UserChatLog, User
 from db.util import insert_data
 from datetime import datetime
 
@@ -22,7 +22,7 @@ def enter_room(session: Session, user_id, room_id):
 
 def leave_room(session: Session, user_id, room_id):
     try:
-        active_user_count = session.query(UserChatroom).filter_by(user_id=user_id, chatroom_id=room_id, is_active=True).count()
+        active_user_count = session.query(UserChatroom).filter_by(chatroom_id=room_id, is_active=True).count()
         if active_user_count == 1:
             chat_room = session.query(Chatroom).filter_by(id=room_id).first()
             chat_room.is_active = False
@@ -32,8 +32,8 @@ def leave_room(session: Session, user_id, room_id):
     except Exception as e:
         raise e
 
-def get_user_count_in_room(session: Session, room_id):
-    return session.query(UserChatroom).filter_by(chatroom_id=room_id, is_active=True).count()
+def is_user_in_chatroom(session: Session, user_id, room_id):
+    return session.query(exists().where(UserChatroom.user_id == user_id, UserChatroom.chatroom_id==room_id, UserChatroom.is_active==True )).scalar()
 
 def create_private_room(session: Session, user_id, tar_user_id):
     room_name = f'p-${user_id}-${tar_user_id}'
@@ -56,17 +56,37 @@ def create_group_room(session: Session, create_user_id, tar_user_id_list):
         raise e
     return room
 
-def get_user_room_list(session: Session, user_id):
+def get_user_chatroom_list(session: Session, user_id):
 
     return session.query(
-        UserChatroom
-    ).filter_by(
+        UserChatroom,
+        func.max(UserChatLog.created_at).label('messaging_time')
+    ).select_from(UserChatroom).filter_by(
         user_id=user_id, is_active=True
     ).join(Chatroom).outerjoin(UserChatLog).group_by(
         UserChatroom.chatroom_id
     ).order_by(
-        func.max(UserChatLog.created_at).label('messaging_time').desc()
+        func.max(UserChatLog.created_at).desc()
     ).all()
+
+def get_chatroom_detail(session: Session, room_id):
+    chatroom = session.query(Chatroom).filter_by(id=room_id).one_or_none()
+    user_list = session.query(UserChatroom).filter_by(chatroom_id=room_id, is_active=True).join(User).all()
+    return {
+        'chatroom': chatroom,
+        'user_list': user_list
+    }
+
+def get_user_count_in_room(session: Session, room_id):
+    return session.query(UserChatroom).filter_by(chatroom_id=room_id, is_active=True).count()
+
+def update_user_read_message_date(session: Session, user_id, room_id, read_message_date):
+    try:
+        user_chatroom = session.query(UserChatroom).filter_by(user_id=user_id, chatroom_id=room_id, is_active=True).one_or_none()
+        user_chatroom.last_read_message_date = read_message_date
+        session.commit()
+    except Exception as e:
+        raise e
 
 
 if __name__ == "__main__":
@@ -79,9 +99,9 @@ if __name__ == "__main__":
     # user2 = add_user(session,'test2', 'test2pwd')
 
     # create_private_room(session, user1.id, user2.id)
-
+    #
     # user_list = [add_user(session, f'many-user-{i:03}', f'many-user-pwd-{i:03}') for i in range(5)]
-
+    #
     # create_group_room(session, user1.id, [u.id for u in user_list])
 
-    print([[r.chatroom.name, r.chatroom_id] for r in get_user_room_list(session, user1.id)])
+    print([[r[0].chatroom.name, r[0].chatroom_id, r[0].last_read_message_date, r[1]] for r in get_user_chatroom_list(session, user1.id)])
