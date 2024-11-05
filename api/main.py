@@ -83,7 +83,7 @@ def signup():
         # 로그인 처리 로직
         return jsonify({"token": access_token, "user_id": user_id, "username": username})
     except:
-        return jsonify({"error": "fail create user"}), 401
+        return jsonify({"error": "fail create user"}), 400
 
 @app.route('/signin', methods=['POST'])
 def signin():
@@ -99,7 +99,7 @@ def signin():
             # 로그인 처리 로직
             return jsonify({"token": access_token, "user_id": user.id, "username": user.username})
     except:
-        return jsonify({"error": "fail signin"}), 401
+        return jsonify({"error": "fail signin"}), 400
 
 @app.route('/users', methods=['GET'])
 def get_user_list():
@@ -115,11 +115,11 @@ def get_user_list():
                 } for user in user_list if user.id != g.user.id
             ]})
     except:
-        return jsonify({"error": "fail get user list"}), 401
+        return jsonify({"error": "fail get user list"}), 400
 
 
 @app.route('/chatrooms', methods=['POST'])
-def create_private_chatroom():
+def create_chatroom():
     data = request.json
     target_user_id_list = data.get('target_user_id_list')
     room_type = data.get('room_type')
